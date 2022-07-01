@@ -77,3 +77,5 @@ Kity 是一个基于 SVG 的矢量图形库，帮助你快速在页面上创建�
 ![Hello Kity](doc/images/hello-kity.png)
 
 ## 文档
+
+相关文档 API[地址](https://yangtao2o.github.io/kity-svg/)
