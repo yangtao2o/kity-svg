@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: core/utils.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: core/utils.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileOverview
+ *
+ * 一些常用的工具方法
+ */
+
+define(function() {
+
+    /**
+     * @class kity.Utils
+     * @catalog core
+     * @static
+     * @description 提供常用的工具方法
+     */
+    var utils = {
+
+        /**
+         * @method each()
+         * @for kity.Utils
+         * @grammar each(obj, interator, context)
+         * @param  {Object|Array} obj 要迭代的对象或数组
+         * @param  {Function} iterator 迭代函数
+         * @param  {Any} context  迭代函数的上下文
+         *
+         * @example 迭代数组
+         *
+         * ```js
+         * kity.Utils.each([1, 2, 3, 4, 5], function(value, index, array) {
+         *     console.log(value, index);
+         * });
+         * // 1, 0
+         * // 2, 1
+         * // 3, 2
+         * // 4, 3
+         * // 5, 4
+         * ```
+         *
+         * @example 迭代对象
+         *
+         * ```js
+         * var obj = {
+         *     name: 'kity',
+         *     version: '1.2.1'
+         * };
+         * var param = [];
+         * kity.Utils.each(obj, function(value, key, obj) {
+         *     param.push(key + '=' + value);
+         * });
+         * console.log(param.join('&amp;')); // "name=kity&amp;version=1.2.1"
+         * ```
+         */
+        each: function each(obj, iterator, context) {
+            if (obj === null) {
+                return;
+            }
+            if (obj.length === +obj.length) {
+                for (var i = 0, l = obj.length; i &lt; l; i++) {
+                    if (iterator.call(context, obj[i], i, obj) === false) {
+                        return false;
+                    }
+                }
+            } else {
+                for (var key in obj) {
+                    if (obj.hasOwnProperty(key)) {
+                        if (iterator.call(context, obj[key], key, obj) === false) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        },
+
+        /**
+         * @method extend()
+         * @for kity.Utils
+         * @grammar extend(target, sources..., notCover) => {object}
+         * @description 把源对象的属性合并到目标对象上
+         * @param {object} target 目标对象
+         * @param {parameter} sources 源对象
+         * @param {boolean} notCover 是否不要覆盖源对象已有的属性
+         *
+         * @example
+         *
+         * ```js
+         * var a = {
+         *     key1: 'a1',
+         *     key2: 'a2'
+         * };
+         *
+         * var b = {
+         *     key2: 'b2',
+         *     key3: 'b3'
+         * };
+         *
+         * var c = {
+         *     key4: 'c4'
+         * };
+         *
+         * var d = kity.extend(a, b, c);
+         *
+         * console.log(d === a); // true
+         * console.log(a); // {key1: 'a1', key2: 'b2', key3: 'b3', key4: 'c4'}
+         * ```
+         */
+        extend: function extend(t) {
+            var a = arguments,
+                notCover = this.isBoolean(a[a.length - 1]) ? a[a.length - 1] : false,
+                len = this.isBoolean(a[a.length - 1]) ? a.length - 1 : a.length;
+            for (var i = 1; i &lt; len; i++) {
+                var x = a[i];
+                for (var k in x) {
+                    if (!notCover || !t.hasOwnProperty(k)) {
+                        t[k] = x[k];
+                    }
+                }
+            }
+            return t;
+        },
+
+        /**
+         * @method deepExtend()
+         * @for kity.Utils
+         * @grammar deepExtend(target, sources..., notCover)
+         * @description 把源对象的属性合并到目标对象上，如果属性是对象，会递归合并
+         * @param {object} target 目标对象
+         * @param {parameter} sources 源对象
+         * @param {boolean} notCover 是否不要覆盖源对象已有的属性
+         */
+        deepExtend: function(t, s) {
+            var a = arguments,
+                notCover = this.isBoolean(a[a.length - 1]) ? a[a.length - 1] : false,
+                len = this.isBoolean(a[a.length - 1]) ? a.length - 1 : a.length;
+            for (var i = 1; i &lt; len; i++) {
+                var x = a[i];
+                for (var k in x) {
+                    if (!notCover || !t.hasOwnProperty(k)) {
+                        if (this.isObject(t[k]) &amp;&amp; this.isObject(x[k])) {
+                            this.deepExtend(t[k], x[k], notCover);
+                        } else {
+                            t[k] = x[k];
+                        }
+                    }
+                }
+            }
+            return t;
+        },
+
+        /**
+         * @method clone()
+         * @for kity.Utils
+         * @grammar clone(obj) => {object}
+         * @description 返回一个对象的克隆副本（非深度复制）
+         * @param  {object} obj 要克隆的对象
+         *
+         * @example
+         *
+         * ```js
+         * var source = {
+         *     key1: {
+         *         key2: 'value2'
+         *     },
+         *     key3: 'value3'
+         * };
+         *
+         * var target = kity.Utils.clone(source);
+         *
+         * console.log(target === source); // false
+         * console.log(target.key1 === source.key1); // true
+         * console.log(target.key3 === source.key3); // true
+         * ```
+         */
+        clone: function clone(obj) {
+            var cloned = {};
+            for (var m in obj) {
+                if (obj.hasOwnProperty(m)) {
+                    cloned[m] = obj[m];
+                }
+            }
+            return cloned;
+        },
+
+        /**
+         * @method copy()
+         * @for kity.Utils
+         * @grammar copy(obj) => {object}
+         * @description 返回一个对象的拷贝副本（深度复制）
+         * @param  {object} obj 要拷贝的对象
+         *
+         * @example
+         *
+         * ```js
+         * var source = {
+         *     key1: {
+         *         key2: 'value2'
+         *     },
+         *     key3: 'value3'
+         * };
+         *
+         * var target = kity.Utils.copy(source);
+         *
+         * console.log(target === source); // false
+         * console.log(target.key1 === source.key1); // false
+         * console.log(target.key3 === source.key3); // true，因为是值类型
+         * ```
+         */
+        copy: function copy(obj) {
+            if (typeof obj !== 'object') return obj;
+            if (typeof obj === 'function') return null;
+            return JSON.parse(JSON.stringify(obj));
+        },
+
+        queryPath: function(path, obj) {
+            var arr = path.split('.');
+            var i = 0,
+                tmp = obj,
+                l = arr.length;
+            while (i &lt; l) {
+                if (arr[i] in tmp) {
+                    tmp = tmp[arr[i]];
+                    i++;
+                    if (i >= l || tmp === undefined) {
+                        return tmp;
+                    }
+                } else {
+                    return undefined;
+                }
+            }
+        },
+
+        getValue: function(value, defaultValue) {
+
+            return value !== undefined ? value : defaultValue;
+
+        },
+
+        /**
+         * @method flatten()
+         * @for kity.Utils
+         * @grammar flatten(arr) => {Array}
+         * @description 返回给定数组的扁平化版本
+         * @param  {Array} arr 要扁平化的数组
+         *
+         * @example
+         *
+         * ```js
+         * var flattened = kity.Utils.flatten([[1, 2], [2, 3], [[4, 5], [6, 7]]]);
+         * console.log(flattened); // [1, 2, 3, 4, 5, 6, 7];
+         * ```
+         */
+        flatten: function flatten(arr) {
+            var result = [],
+                length = arr.length,
+                i;
+            for (i = 0; i &lt; length; i++) {
+                if (arr[i] instanceof Array) {
+                    result = result.concat(utils.flatten(arr[i]));
+                } else {
+                    result.push(arr[i]);
+                }
+            }
+            return result;
+        },
+
+        /**
+         * @method paralle()
+         * @for kity.Utils
+         * @grammar paralle() => {Any}
+         *
+         * @description 平行地对 v1 和 v2 进行指定的操作
+         *
+         *    如果 v1 是数字，那么直接进行 op 操作
+         *    如果 v1 是对象，那么返回一个对象，其元素是 v1 和 v2 同键值的每个元素平行地进行 op 操作的结果
+         *    如果 v1 是数组，那么返回一个数组，其元素是 v1 和 v2 同索引的每个元素平行地进行 op 操作的结果
+         *
+         * @param  {Number|Object|Array} v1 第一个操作数
+         * @param  {Number|Object|Array} v2 第二个操作数
+         * @param  {Function} op 操作函数
+         *
+         *
+         *
+         * @example
+         *
+         * ```js
+         * var a = {
+         *     value1: 1,
+         *     value2: 2,
+         *     value3: [3, 4, 5]
+         * };
+         *
+         * var b = {
+         *     value1: 2,
+         *     value2: 3,
+         *     value3: [4, 5, 6]
+         * };
+         *
+         * var c = kity.Utils.paralle(a, b, function(v1, v2) {
+         *     return v1 + v2;
+         * });
+         *
+         * console.log(c.value1); // 3
+         * console.log(c.value2); // 5
+         * console.log(c.value3); // [7, 9, 11]
+         *
+         * ```
+         */
+        paralle: function paralle(v1, v2, op) {
+            var Class, field, index, name, value;
+
+            // 数组
+            if (v1 instanceof Array) {
+                value = [];
+                for (index = 0; index &lt; v1.length; index++) {
+                    value.push(utils.paralle(v1[index], v2[index], op));
+                }
+                return value;
+            }
+
+            // 对象
+            if (v1 instanceof Object) {
+
+                // 如果值是一个支持原始表示的实例，获取其原始表示
+                Class = v1.getClass &amp;&amp; v1.getClass();
+
+                if (Class &amp;&amp; Class.parse) {
+                    v1 = v1.valueOf();
+                    v2 = v2.valueOf();
+                    value = utils.paralle(v1, v2, op);
+                    value = Class.parse(value);
+                }
+
+                // 否则作为字面量封箱
+                else {
+                    value = {};
+                    for (name in v1) {
+                        if (v1.hasOwnProperty(name) &amp;&amp; v2.hasOwnProperty(name)) {
+                            value[name] = utils.paralle(v1[name], v2[name], op);
+                        }
+                    }
+                }
+
+                return value;
+            }
+
+            // 是否数字
+            if (false === isNaN(parseFloat(v1))) {
+                return op(v1, v2);
+            }
+
+            return value;
+        },
+
+        /**
+         * 创建 op 操作的一个平行化版本
+         */
+        parallelize: function parallelize(op) {
+            return function(v1, v2) {
+                return utils.paralle(v1, v2, op);
+            };
+        }
+    };
+
+    /**
+     * @method isString()
+     * @for kity.Utils
+     * @grammar isString(unknown) => {boolean}
+     * @description 判断一个值是否为字符串类型
+     * @param  {any} unknown 要判断的值
+     */
+    /**
+     * @method isFunction()
+     * @for kity.Utils
+     * @grammar isFunction(unknown) => {boolean}
+     * @description 判断一个值是否为函数类型
+     * @param  {any} unknown 要判断的值
+     */
+    /**
+     * @method isArray()
+     * @for kity.Utils
+     * @grammar isArray(unknown) => {boolean}
+     * @description 判断一个值是否为数组类型
+     * @param  {any} unknown 要判断的值
+     */
+    /**
+     * @method isNumber()
+     * @for kity.Utils
+     * @grammar isNumber(unknown) => {boolean}
+     * @description 判断一个值是否为数字类型
+     * @param  {any} unknown 要判断的值
+     */
+    /**
+     * @method isRegExp()
+     * @for kity.Utils
+     * @grammar isRegExp(unknown) => {boolean}
+     * @description 判断一个值是否为正则表达式类型
+     * @param  {any} unknown 要判断的值
+     */
+    /**
+     * @method isObject()
+     * @for kity.Utils
+     * @grammar isObject(unknown) => {boolean}
+     * @description 判断一个值是否为对象类型
+     * @param  {any} unknown 要判断的值
+     */
+    /**
+     * @method isBoolean()
+     * @for kity.Utils
+     * @grammar isBoolean(unknown) => {boolean}
+     * @description 判断一个值是否为布尔类型
+     * @param  {any} unknown 要判断的值
+     */
+    utils.each(['String', 'Function', 'Array', 'Number', 'RegExp', 'Object', 'Boolean'], function(v) {
+        utils['is' + v] = function typeCheck(obj) {
+            return Object.prototype.toString.apply(obj) == '[object ' + v + ']';
+        };
+    });
+
+    return utils;
+});</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="constructor.html">constructor</a></li><li><a href="kity.Animator.html">Animator</a></li><li><a href="kity.Bezier.html">Bezier</a></li><li><a href="kity.BezierPoint.html">BezierPoint</a></li><li><a href="kity.Box.html">Box</a></li><li><a href="kity.Browser.html">Browser</a></li><li><a href="kity.Circle.html">Circle</a></li><li><a href="kity.Class.html">Class</a></li><li><a href="kity.Clip.html">Clip</a></li><li><a href="kity.Color.html">Color</a></li><li><a href="kity.MotionAnimator.html">MotionAnimator</a></li><li><a href="kity.OpacityAnimator.html">OpacityAnimator</a></li><li><a href="kity.PathAnimator.html">PathAnimator</a></li><li><a href="kity.Point.html">Point</a></li><li><a href="kity.Rect.html">Rect</a></li><li><a href="kity.RotateAnimator.html">RotateAnimator</a></li><li><a href="kity.ScaleAnimator.html">ScaleAnimator</a></li><li><a href="kity.Timeline.html">Timeline</a></li><li><a href="kity.TranslateAnimator.html">TranslateAnimator</a></li><li><a href="kity.Utils.html">Utils</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:finish">finish</a></li><li><a href="global.html#event:pause">pause</a></li><li><a href="global.html#event:play">play</a></li><li><a href="global.html#event:repeat">repeat</a></li><li><a href="global.html#event:rollback">rollback</a></li><li><a href="global.html#event:stop">stop</a></li></ul><h3>Global</h3><ul><li><a href="global.html#animate()">animate()</a></li><li><a href="global.html#base()">base()</a></li><li><a href="global.html#callBase()">callBase()</a></li><li><a href="global.html#callMixin()">callMixin()</a></li><li><a href="global.html#clip()">clip()</a></li><li><a href="global.html#clipWidth()">clipWidth()</a></li><li><a href="global.html#clone()">clone()</a></li><li><a href="global.html#copy()">copy()</a></li><li><a href="global.html#create()">create()</a></li><li><a href="global.html">createHSL()</a></li><li><a href="global.html">createHSLA()</a></li><li><a href="global.html">createRGB()</a></li><li><a href="global.html">createRGBA()</a></li><li><a href="global.html#dec()">dec()</a></li><li><a href="global.html#deepExtend()">deepExtend()</a></li><li><a href="global.html#each()">each()</a></li><li><a href="global.html#expand()">expand()</a></li><li><a href="global.html#extend()">extend()</a></li><li><a href="global.html#fadeIn()">fadeIn()</a></li><li><a href="global.html#fadeOut()">fadeOut()</a></li><li><a href="global.html#fadeTo()">fadeTo()</a></li><li><a href="global.html#flatten()">flatten()</a></li><li><a href="global.html">fromPolar()</a></li><li><a href="global.html#fxOpacity()">fxOpacity()</a></li><li><a href="global.html#fxPath()">fxPath()</a></li><li><a href="global.html#fxRotate()">fxRotate()</a></li><li><a href="global.html#fxScale">fxScale</a></li><li><a href="global.html#fxTranslate()">fxTranslate()</a></li><li><a href="global.html#get()">get()</a></li><li><a href="global.html#getBackward()">getBackward()</a></li><li><a href="global.html#getBezierPoints()">getBezierPoints()</a></li><li><a href="global.html#getClass()">getClass()</a></li><li><a href="global.html#getDelta()">getDelta()</a></li><li><a href="global.html#getForward()">getForward()</a></li><li><a href="global.html#getPlayTime()">getPlayTime()</a></li><li><a href="global.html#getRadius">getRadius</a></li><li><a href="global.html#getRangeX()">getRangeX()</a></li><li><a href="global.html#getRangeY()">getRangeY()</a></li><li><a href="global.html#getTimeProportion()">getTimeProportion()</a></li><li><a href="global.html#getType()">getType()</a></li><li><a href="global.html#getValue()">getValue()</a></li><li><a href="global.html#getValueProportion()">getValueProportion()</a></li><li><a href="global.html#getVertex()">getVertex()</a></li><li><a href="global.html#inc()">inc()</a></li><li><a href="global.html#intersect()">intersect()</a></li><li><a href="global.html#inverse">inverse</a></li><li><a href="global.html#isArray()">isArray()</a></li><li><a href="global.html#isBoolean()">isBoolean()</a></li><li><a href="global.html#isEmpty()">isEmpty()</a></li><li><a href="global.html#isFunction()">isFunction()</a></li><li><a href="global.html#isNumber()">isNumber()</a></li><li><a href="global.html#isObject()">isObject()</a></li><li><a href="global.html#isRegExp()">isRegExp()</a></li><li><a href="global.html#isSmooth()">isSmooth()</a></li><li><a href="global.html#isString()">isString()</a></li><li><a href="global.html#isSymReflaction()">isSymReflaction()</a></li><li><a href="global.html#merge()">merge()</a></li><li><a href="global.html#mixin()">mixin()</a></li><li><a href="global.html#motion()">motion()</a></li><li><a href="global.html#moveTo()">moveTo()</a></li><li><a href="global.html#paralle()">paralle()</a></li><li><a href="global.html">parse()</a></li><li><a href="global.html#pause()">pause()</a></li><li><a href="global.html#pipe()">pipe()</a></li><li><a href="global.html#play()">play()</a></li><li><a href="global.html#repeat()">repeat()</a></li><li><a href="global.html#reverse()">reverse()</a></li><li><a href="global.html#set()">set()</a></li><li><a href="global.html#setBackward()">setBackward()</a></li><li><a href="global.html#setBezierPoints()">setBezierPoints()</a></li><li><a href="global.html#setBox">setBox</a></li><li><a href="global.html#setForward()">setForward()</a></li><li><a href="global.html#setHeight">setHeight</a></li><li><a href="global.html#setRadius">setRadius</a></li><li><a href="global.html#setSize">setSize</a></li><li><a href="global.html#setSmooth()">setSmooth()</a></li><li><a href="global.html#setSymReflaction()">setSymReflaction()</a></li><li><a href="global.html#setVertex()">setVertex()</a></li><li><a href="global.html#setWidth">setWidth</a></li><li><a href="global.html#start()">start()</a></li><li><a href="global.html#stop()">stop()</a></li><li><a href="global.html#timeline()">timeline()</a></li><li><a href="global.html#toHEX()">toHEX()</a></li><li><a href="global.html#toHSL()">toHSL()</a></li><li><a href="global.html#toHSLA()">toHSLA()</a></li><li><a href="global.html#toRGB()">toRGB()</a></li><li><a href="global.html#toRGBA()">toRGBA()</a></li><li><a href="global.html#toString()">toString()</a></li><li><a href="global.html#valueOf()">valueOf()</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.10</a> on Fri Jul 01 2022 17:38:03 GMT+0800 (中国标准时间)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
