@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: graphic/bezierpoint.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: graphic/bezierpoint.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileOverview
+ *
+ * 表示一个贝塞尔点
+ */
+
+define(function(require, exports, module) {
+
+    var ShapePoint = require('./shapepoint');
+    var Vector = require('./vector');
+
+    /**
+     * @class kity.BezierPoint
+     *
+     * @description 表示一个贝塞尔点
+     *              一个贝塞尔点由顶点坐标（曲线经过的点）、前方控制点、后方控制点表示
+     */
+    var BezierPoint = require('../core/class').createClass('BezierPoint', {
+
+        /**
+         * @constructor
+         * @for kity.BezierPoint
+         *
+         * @description 创建一个具有默认顶点坐标的贝塞尔点，两个控制点的坐标和顶点一致
+         *
+         * @param  {Number}  x        顶点的 x 坐标
+         * @param  {Number}  y        顶点的 y 坐标
+         * @param  {Boolean} isSmooth 指示当前贝塞尔点是否光滑，光滑会约束顶点和两个控制点共线
+         */
+        constructor: function(x, y, isSmooth) {
+
+            //顶点
+            this.vertex = new ShapePoint(x, y);
+
+            //控制点
+            this.forward = new ShapePoint(x, y);
+            this.backward = new ShapePoint(x, y);
+
+            //是否平滑
+            this.setSmooth((isSmooth === undefined) || isSmooth);
+
+            this.setSymReflaction(true);
+
+        },
+
+        /**
+         * @method clone()
+         * @for kity.BezierPoint
+         * @description 返回贝塞尔点的一份拷贝
+         *
+         * @grammar clone() => {kity.BezierPoint}
+         */
+        clone: function() {
+
+            var newPoint = new BezierPoint(),
+                tmp = null;
+
+            tmp = this.getVertex();
+            newPoint.setVertex(tmp.x, tmp.y);
+
+            tmp = this.getForward();
+            newPoint.setForward(tmp.x, tmp.y);
+
+            tmp = this.getBackward();
+            newPoint.setBackward(tmp.x, tmp.y);
+
+            newPoint.setSymReflaction(this.isSymReflaction);
+            newPoint.setSmooth(this.isSmooth());
+
+            return newPoint;
+
+        },
+
+        /**
+         * @method setVertex()
+         * @for kity.BezierPoint
+         * @description 设置贝塞尔点的顶点坐标，注意，控制点的坐标不会跟着变化。希望控制点的坐标跟着变化，请用 moveTo() 方法
+         *
+         * @grammar setVertex(x, y) => {this}
+         *
+         * @param {Number} x 顶点的 x 坐标
+         * @param {Number} y 顶点的 y 坐标
+         */
+        setVertex: function(x, y) {
+
+            this.vertex.setPoint(x, y);
+
+            this.update();
+
+            return this;
+
+        },
+
+        /**
+         * @method moveTo()
+         * @for kity.BezierPoint
+         * @description 同步移动整个贝塞尔点，使顶点的移动到指定的坐标中。控制点的位置相对顶点坐标固定。
+         *
+         * @grammar moveTo() => {this}
+         *
+         * @param  {Number} x 顶点的目标 x 坐标
+         * @param  {Number} y 顶点的目标 y 坐标
+         *
+         */
+        moveTo: function(x, y) {
+
+            var oldForward = this.forward.getPoint(),
+                oldBackward = this.backward.getPoint(),
+                oldVertex = this.vertex.getPoint(),
+
+                //移动距离
+                distance = {
+                    left: x - oldVertex.x,
+                    top: y - oldVertex.y
+                };
+
+            // 更新
+            this.forward.setPoint(oldForward.x + distance.left, oldForward.y + distance.top);
+            this.backward.setPoint(oldBackward.x + distance.left, oldBackward.y + distance.top);
+            this.vertex.setPoint(x, y);
+
+            this.update();
+
+        },
+
+        /**
+         * @method setForward()
+         * @for kity.BezierPoint
+         * @description 设置前方控制点的位置，如果贝塞尔点光滑，后方控制点会跟着联动
+         *
+         * @grammar setForward(x, y) => {this}
+         *
+         * @param {Number} x 前方控制点的 x 坐标
+         * @param {Number} y 前方控制点的 y 坐标
+         */
+        setForward: function(x, y) {
+
+            this.forward.setPoint(x, y);
+
+            //更新后置点
+            if (this.smooth) {
+                this.updateAnother(this.forward, this.backward);
+            }
+            this.update();
+            this.lastControlPointSet = this.forward;
+            return this;
+
+        },
+
+        /**
+         * @method setBackward()
+         * @for kity.BezierPoint
+         * @description 设置后方控制点的位置，如果贝塞尔点光滑，前方控制点会跟着联动
+         *
+         * @grammar setBackward(x, y) => {this}
+         *
+         * @param {Number} x 后方控制点的 x 坐标
+         * @param {Number} y 后方控制点的 y 坐标
+         */
+        setBackward: function(x, y) {
+
+            this.backward.setPoint(x, y);
+
+            //更新前置点
+            if (this.smooth) {
+                this.updateAnother(this.backward, this.forward);
+            }
+
+            this.update();
+            this.lastControlPointSet = this.backward;
+            return this;
+
+        },
+
+        /**
+         * @method setSymReflaction()
+         * @for kity.BezierPoint
+         * @description 设定是否镜像两个控制点的位置
+         *
+         * @grammar setSymReflaction(value) => {this}
+         *
+         * @param {boolean} value 如果设置为 true，且贝塞尔点光滑，两个控制点离顶点的距离相等
+         */
+        setSymReflaction: function(value) {
+            this.symReflaction = value;
+            if (this.smooth) this.setSmooth(true);
+            return this;
+        },
+
+        /**
+         * @method isSymReflaction()
+         * @for kity.BezierPoint
+         * @description 当前贝塞尔点的两个控制点是否被镜像约束
+         *
+         * @grammar isSymReflaction() => {boolean}
+         */
+        isSymReflaction: function() {
+            return this.symReflaction;
+        },
+
+        /**
+         * @private
+         *
+         * 根据前方控制点或后方控制点更新另一方
+         */
+        updateAnother: function(p, q) {
+            var v = this.getVertex(),
+                pv = Vector.fromPoints(p.getPoint(), v),
+                vq = Vector.fromPoints(v, q.getPoint());
+            vq = pv.normalize(this.isSymReflaction() ? pv.length() : vq.length());
+            q.setPoint(v.x + vq.x, v.y + vq.y);
+            return this;
+        },
+
+        /**
+         * @method setSmooth()
+         * @for kity.BezierPoint
+         * @description 设置贝塞尔点是否光滑，光滑会约束顶点和两个控制点共线
+         *
+         * @param {Boolean} isSmooth 设置为 true 让贝塞尔点光滑
+         */
+        setSmooth: function(isSmooth) {
+            var lc;
+
+            this.smooth = !!isSmooth;
+
+            if (this.smooth &amp;&amp; (lc = this.lastControlPointSet)) {
+                this.updateAnother(lc, lc == this.forward ? this.backward : this.forward);
+            }
+
+            return this;
+
+        },
+
+        /**
+         * @method isSmooth()
+         * @for kity.BezierPoint
+         * @description 判断贝塞尔点是否光滑
+         *
+         * @grammar isSmooth() => {boolean}
+         */
+        isSmooth: function() {
+            return this.smooth;
+        },
+
+        /**
+         * @method getVertex()
+         * @for kity.BezierPoint
+         * @description 获得当前贝塞尔点的顶点
+         *
+         * @grammar getVertex() => {kity.ShapePoint}
+         */
+        getVertex: function() {
+
+            return this.vertex.getPoint();
+
+        },
+
+        /**
+         * @method getForward()
+         * @for kity.BezierPoint
+         * @description 获得当前贝塞尔点的前方控制点
+         *
+         * @grammar getForward() => {kity.ShapePoint}
+         */
+        getForward: function() {
+
+            return this.forward.getPoint();
+
+        },
+
+
+        /**
+         * @method getBackward()
+         * @for kity.BezierPoint
+         * @description 获得当前贝塞尔点的后方控制点
+         *
+         * @grammar getBackward() => {kity.ShapePoint}
+         */
+        getBackward: function() {
+
+            return this.backward.getPoint();
+
+        },
+
+        /**
+         * @private
+         *
+         * 联动更新相关的贝塞尔曲线
+         */
+        update: function() {
+
+            if (!this.container) {
+                return this;
+            }
+
+            //新增参数 this， 把当前引起变化的点传递过去， 以便有需要的地方可以获取到引起变化的源
+            if (this.container.update) this.container.update(this);
+
+        }
+
+    });
+
+    return BezierPoint;
+
+});</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="constructor.html">constructor</a></li><li><a href="kity.Animator.html">Animator</a></li><li><a href="kity.Bezier.html">Bezier</a></li><li><a href="kity.BezierPoint.html">BezierPoint</a></li><li><a href="kity.Box.html">Box</a></li><li><a href="kity.Browser.html">Browser</a></li><li><a href="kity.Circle.html">Circle</a></li><li><a href="kity.Class.html">Class</a></li><li><a href="kity.Clip.html">Clip</a></li><li><a href="kity.Color.html">Color</a></li><li><a href="kity.MotionAnimator.html">MotionAnimator</a></li><li><a href="kity.OpacityAnimator.html">OpacityAnimator</a></li><li><a href="kity.PathAnimator.html">PathAnimator</a></li><li><a href="kity.Point.html">Point</a></li><li><a href="kity.Rect.html">Rect</a></li><li><a href="kity.RotateAnimator.html">RotateAnimator</a></li><li><a href="kity.ScaleAnimator.html">ScaleAnimator</a></li><li><a href="kity.Timeline.html">Timeline</a></li><li><a href="kity.TranslateAnimator.html">TranslateAnimator</a></li><li><a href="kity.Utils.html">Utils</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:finish">finish</a></li><li><a href="global.html#event:pause">pause</a></li><li><a href="global.html#event:play">play</a></li><li><a href="global.html#event:repeat">repeat</a></li><li><a href="global.html#event:rollback">rollback</a></li><li><a href="global.html#event:stop">stop</a></li></ul><h3>Global</h3><ul><li><a href="global.html#animate()">animate()</a></li><li><a href="global.html#base()">base()</a></li><li><a href="global.html#callBase()">callBase()</a></li><li><a href="global.html#callMixin()">callMixin()</a></li><li><a href="global.html#clip()">clip()</a></li><li><a href="global.html#clipWidth()">clipWidth()</a></li><li><a href="global.html#clone()">clone()</a></li><li><a href="global.html#copy()">copy()</a></li><li><a href="global.html#create()">create()</a></li><li><a href="global.html">createHSL()</a></li><li><a href="global.html">createHSLA()</a></li><li><a href="global.html">createRGB()</a></li><li><a href="global.html">createRGBA()</a></li><li><a href="global.html#dec()">dec()</a></li><li><a href="global.html#deepExtend()">deepExtend()</a></li><li><a href="global.html#each()">each()</a></li><li><a href="global.html#expand()">expand()</a></li><li><a href="global.html#extend()">extend()</a></li><li><a href="global.html#fadeIn()">fadeIn()</a></li><li><a href="global.html#fadeOut()">fadeOut()</a></li><li><a href="global.html#fadeTo()">fadeTo()</a></li><li><a href="global.html#flatten()">flatten()</a></li><li><a href="global.html">fromPolar()</a></li><li><a href="global.html#fxOpacity()">fxOpacity()</a></li><li><a href="global.html#fxPath()">fxPath()</a></li><li><a href="global.html#fxRotate()">fxRotate()</a></li><li><a href="global.html#fxScale">fxScale</a></li><li><a href="global.html#fxTranslate()">fxTranslate()</a></li><li><a href="global.html#get()">get()</a></li><li><a href="global.html#getBackward()">getBackward()</a></li><li><a href="global.html#getBezierPoints()">getBezierPoints()</a></li><li><a href="global.html#getClass()">getClass()</a></li><li><a href="global.html#getDelta()">getDelta()</a></li><li><a href="global.html#getForward()">getForward()</a></li><li><a href="global.html#getPlayTime()">getPlayTime()</a></li><li><a href="global.html#getRadius">getRadius</a></li><li><a href="global.html#getRangeX()">getRangeX()</a></li><li><a href="global.html#getRangeY()">getRangeY()</a></li><li><a href="global.html#getTimeProportion()">getTimeProportion()</a></li><li><a href="global.html#getType()">getType()</a></li><li><a href="global.html#getValue()">getValue()</a></li><li><a href="global.html#getValueProportion()">getValueProportion()</a></li><li><a href="global.html#getVertex()">getVertex()</a></li><li><a href="global.html#inc()">inc()</a></li><li><a href="global.html#intersect()">intersect()</a></li><li><a href="global.html#inverse">inverse</a></li><li><a href="global.html#isArray()">isArray()</a></li><li><a href="global.html#isBoolean()">isBoolean()</a></li><li><a href="global.html#isEmpty()">isEmpty()</a></li><li><a href="global.html#isFunction()">isFunction()</a></li><li><a href="global.html#isNumber()">isNumber()</a></li><li><a href="global.html#isObject()">isObject()</a></li><li><a href="global.html#isRegExp()">isRegExp()</a></li><li><a href="global.html#isSmooth()">isSmooth()</a></li><li><a href="global.html#isString()">isString()</a></li><li><a href="global.html#isSymReflaction()">isSymReflaction()</a></li><li><a href="global.html#merge()">merge()</a></li><li><a href="global.html#mixin()">mixin()</a></li><li><a href="global.html#motion()">motion()</a></li><li><a href="global.html#moveTo()">moveTo()</a></li><li><a href="global.html#paralle()">paralle()</a></li><li><a href="global.html">parse()</a></li><li><a href="global.html#pause()">pause()</a></li><li><a href="global.html#pipe()">pipe()</a></li><li><a href="global.html#play()">play()</a></li><li><a href="global.html#repeat()">repeat()</a></li><li><a href="global.html#reverse()">reverse()</a></li><li><a href="global.html#set()">set()</a></li><li><a href="global.html#setBackward()">setBackward()</a></li><li><a href="global.html#setBezierPoints()">setBezierPoints()</a></li><li><a href="global.html#setBox">setBox</a></li><li><a href="global.html#setForward()">setForward()</a></li><li><a href="global.html#setHeight">setHeight</a></li><li><a href="global.html#setRadius">setRadius</a></li><li><a href="global.html#setSize">setSize</a></li><li><a href="global.html#setSmooth()">setSmooth()</a></li><li><a href="global.html#setSymReflaction()">setSymReflaction()</a></li><li><a href="global.html#setVertex()">setVertex()</a></li><li><a href="global.html#setWidth">setWidth</a></li><li><a href="global.html#start()">start()</a></li><li><a href="global.html#stop()">stop()</a></li><li><a href="global.html#timeline()">timeline()</a></li><li><a href="global.html#toHEX()">toHEX()</a></li><li><a href="global.html#toHSL()">toHSL()</a></li><li><a href="global.html#toHSLA()">toHSLA()</a></li><li><a href="global.html#toRGB()">toRGB()</a></li><li><a href="global.html#toRGBA()">toRGBA()</a></li><li><a href="global.html#toString()">toString()</a></li><li><a href="global.html#valueOf()">valueOf()</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.10</a> on Fri Jul 01 2022 17:38:03 GMT+0800 (中国标准时间)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

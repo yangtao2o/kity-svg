@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: core/browser.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: core/browser.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileOverview
+ *
+ * 提供浏览器判断的一些字段
+ */
+
+define(function() {
+
+    /**
+     * @class kity.Browser
+     * @catalog core
+     * @static
+     * @description 提供浏览器信息
+     */
+    var browser = function() {
+        var agent = navigator.userAgent.toLowerCase(), 
+            opera = window.opera,
+            browser;
+
+        // 浏览器对象
+        browser = {
+            /**
+             * @property platform
+             * @description 获取浏览器所在系统,"Win"->Windows;"Mac"->Mac;"Lux"->Linux
+             * @type {String}
+             */
+            platform: (function(navigator) {
+                var _p = {
+                    "win32": "Win",
+                    "macintel": "Mac"
+                };
+                return _p[navigator.platform.toLowerCase()] || "Lux";
+            })(navigator),
+
+            /**
+             * 猎豹,区分两种不同内核
+             */
+            lb: (function(agent) {
+                if (~agent.indexOf("lbbrowser")) {
+                    return ~agent.indexOf("msie") ? "ie" : "chrome";
+                }
+                return false;
+            })(agent),
+
+            /**
+             * 搜狗
+             */
+            sg: /se[\s\S]+metasr/.test(agent),
+
+            /**
+             * 百度
+             */
+            bd: !!(~agent.indexOf("bidubrowser")),
+
+            /**
+             * edge浏览器
+             */
+            edge: !!(~agent.indexOf("edge")),
+            
+            /**
+             * chrome初始化为false
+             * @type {Boolean}
+             */
+            chrome: false,
+
+            /**
+             * @property opera
+             * @for kity.Browser
+             * @description 判断是否为 Opera 浏览器
+             * @type {boolean}
+             */
+            opera: (!!opera &amp;&amp; opera.version),
+
+
+            /**
+             * @property webkit
+             * @for kity.Browser
+             * @description 判断是否为 Webkit 内核的浏览器
+             * @type {boolean}
+             */
+            webkit: (agent.indexOf(' applewebkit/') > -1),
+
+
+            /**
+             * @property mac
+             * @for kity.Browser
+             * @description 判断是否为 Mac 下的浏览器
+             * @type {boolean}
+             */
+            mac: (agent.indexOf('macintosh') > -1)
+        };
+        /**
+         * @property ie
+         * @for kity.Browser
+         * @description 判断是否为 IE 浏览器
+         * @type {boolean}
+         */
+        browser.ie = !browser.lb &amp;&amp; /(msie\s|trident.*rv:)([\w.]+)/.test(agent);
+        browser.gecko = (navigator.product == 'Gecko' &amp;&amp; !browser.webkit &amp;&amp; !browser.opera &amp;&amp; !browser.ie);
+
+        var version = 0;
+
+        // Internet Explorer 6.0+
+        if (browser.ie) {
+
+            version = (agent.match(/(msie\s|trident.*rv:)([\w.]+)/)[2] || 0) * 1;
+
+            browser.ie11Compat = document.documentMode == 11;
+
+            browser.ie9Compat = document.documentMode == 9;
+
+        }
+
+        // Gecko.
+        if (browser.gecko) {
+            var geckoRelease = agent.match(/rv:([\d\.]+)/);
+            if (geckoRelease) {
+                geckoRelease = geckoRelease[1].split('.');
+                version = geckoRelease[0] * 10000 + (geckoRelease[1] || 0) * 100 + (geckoRelease[2] || 0) * 1;
+            }
+        }
+
+        // 排除其他chrome内核的浏览器的干扰
+        if (/chrome\/(\d+\.\d)/i.test(agent) &amp;&amp; !browser.bd &amp;&amp; !browser.opera &amp;&amp; !browser.lb &amp;&amp; !browser.sg &amp;&amp; !browser.edge) {
+            /**
+             * @property chrome
+             * @for kity.Browser
+             * @description 判断是否为 Chrome 浏览器
+             * @type {boolean}
+             */
+            browser.chrome = +RegExp['\x241'];
+        }
+
+
+        if (/(\d+\.\d)?(?:\.\d)?\s+safari\/?(\d+\.\d+)?/i.test(agent) &amp;&amp; !/chrome/i.test(agent)) {
+            browser.safari = +(RegExp['\x241'] || RegExp['\x242']);
+        }
+
+
+        // Opera 9.50+
+        if (browser.opera)
+            version = parseFloat(opera.version());
+
+        // WebKit 522+ (Safari 3+)
+        if (browser.webkit)
+            version = parseFloat(agent.match(/ applewebkit\/(\d+)/)[1]);
+
+        // 搜狗版本号无从得知
+        // 猎豹版本号无从得知
+
+        // 百度
+        if (browser.bd) 
+            version = parseFloat(agent.match(/bidubrowser\/(\d+)/)[1]);
+        
+        // Opera 9.50+
+        if (browser.opera) 
+            version = parseFloat(agent.match(/opr\/(\d+)/)[1]);
+        
+        // edge
+        if (browser.edge) 
+            version = parseFloat(agent.match(/edge\/(\d+)/)[1]);
+        /**
+         * @property version
+         * @for kity.Browser
+         * @description 获取当前浏览器的版本
+         * @type {Number}
+         */
+        browser.version = version;
+
+
+        browser.isCompatible = !browser.mobile &amp;&amp; (
+            (browser.ie &amp;&amp; version >= 6) ||
+            (browser.gecko &amp;&amp; version >= 10801) ||
+            (browser.opera &amp;&amp; version >= 9.5) ||
+            (browser.air &amp;&amp; version >= 1) ||
+            (browser.webkit &amp;&amp; version >= 522) ||
+            false);
+        return browser;
+    }();
+
+    return browser;
+});</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="constructor.html">constructor</a></li><li><a href="kity.Animator.html">Animator</a></li><li><a href="kity.Bezier.html">Bezier</a></li><li><a href="kity.BezierPoint.html">BezierPoint</a></li><li><a href="kity.Box.html">Box</a></li><li><a href="kity.Browser.html">Browser</a></li><li><a href="kity.Circle.html">Circle</a></li><li><a href="kity.Class.html">Class</a></li><li><a href="kity.Clip.html">Clip</a></li><li><a href="kity.Color.html">Color</a></li><li><a href="kity.MotionAnimator.html">MotionAnimator</a></li><li><a href="kity.OpacityAnimator.html">OpacityAnimator</a></li><li><a href="kity.PathAnimator.html">PathAnimator</a></li><li><a href="kity.Point.html">Point</a></li><li><a href="kity.Rect.html">Rect</a></li><li><a href="kity.RotateAnimator.html">RotateAnimator</a></li><li><a href="kity.ScaleAnimator.html">ScaleAnimator</a></li><li><a href="kity.Timeline.html">Timeline</a></li><li><a href="kity.TranslateAnimator.html">TranslateAnimator</a></li><li><a href="kity.Utils.html">Utils</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:finish">finish</a></li><li><a href="global.html#event:pause">pause</a></li><li><a href="global.html#event:play">play</a></li><li><a href="global.html#event:repeat">repeat</a></li><li><a href="global.html#event:rollback">rollback</a></li><li><a href="global.html#event:stop">stop</a></li></ul><h3>Global</h3><ul><li><a href="global.html#animate()">animate()</a></li><li><a href="global.html#base()">base()</a></li><li><a href="global.html#callBase()">callBase()</a></li><li><a href="global.html#callMixin()">callMixin()</a></li><li><a href="global.html#clip()">clip()</a></li><li><a href="global.html#clipWidth()">clipWidth()</a></li><li><a href="global.html#clone()">clone()</a></li><li><a href="global.html#copy()">copy()</a></li><li><a href="global.html#create()">create()</a></li><li><a href="global.html">createHSL()</a></li><li><a href="global.html">createHSLA()</a></li><li><a href="global.html">createRGB()</a></li><li><a href="global.html">createRGBA()</a></li><li><a href="global.html#dec()">dec()</a></li><li><a href="global.html#deepExtend()">deepExtend()</a></li><li><a href="global.html#each()">each()</a></li><li><a href="global.html#expand()">expand()</a></li><li><a href="global.html#extend()">extend()</a></li><li><a href="global.html#fadeIn()">fadeIn()</a></li><li><a href="global.html#fadeOut()">fadeOut()</a></li><li><a href="global.html#fadeTo()">fadeTo()</a></li><li><a href="global.html#flatten()">flatten()</a></li><li><a href="global.html">fromPolar()</a></li><li><a href="global.html#fxOpacity()">fxOpacity()</a></li><li><a href="global.html#fxPath()">fxPath()</a></li><li><a href="global.html#fxRotate()">fxRotate()</a></li><li><a href="global.html#fxScale">fxScale</a></li><li><a href="global.html#fxTranslate()">fxTranslate()</a></li><li><a href="global.html#get()">get()</a></li><li><a href="global.html#getBackward()">getBackward()</a></li><li><a href="global.html#getBezierPoints()">getBezierPoints()</a></li><li><a href="global.html#getClass()">getClass()</a></li><li><a href="global.html#getDelta()">getDelta()</a></li><li><a href="global.html#getForward()">getForward()</a></li><li><a href="global.html#getPlayTime()">getPlayTime()</a></li><li><a href="global.html#getRadius">getRadius</a></li><li><a href="global.html#getRangeX()">getRangeX()</a></li><li><a href="global.html#getRangeY()">getRangeY()</a></li><li><a href="global.html#getTimeProportion()">getTimeProportion()</a></li><li><a href="global.html#getType()">getType()</a></li><li><a href="global.html#getValue()">getValue()</a></li><li><a href="global.html#getValueProportion()">getValueProportion()</a></li><li><a href="global.html#getVertex()">getVertex()</a></li><li><a href="global.html#inc()">inc()</a></li><li><a href="global.html#intersect()">intersect()</a></li><li><a href="global.html#inverse">inverse</a></li><li><a href="global.html#isArray()">isArray()</a></li><li><a href="global.html#isBoolean()">isBoolean()</a></li><li><a href="global.html#isEmpty()">isEmpty()</a></li><li><a href="global.html#isFunction()">isFunction()</a></li><li><a href="global.html#isNumber()">isNumber()</a></li><li><a href="global.html#isObject()">isObject()</a></li><li><a href="global.html#isRegExp()">isRegExp()</a></li><li><a href="global.html#isSmooth()">isSmooth()</a></li><li><a href="global.html#isString()">isString()</a></li><li><a href="global.html#isSymReflaction()">isSymReflaction()</a></li><li><a href="global.html#merge()">merge()</a></li><li><a href="global.html#mixin()">mixin()</a></li><li><a href="global.html#motion()">motion()</a></li><li><a href="global.html#moveTo()">moveTo()</a></li><li><a href="global.html#paralle()">paralle()</a></li><li><a href="global.html">parse()</a></li><li><a href="global.html#pause()">pause()</a></li><li><a href="global.html#pipe()">pipe()</a></li><li><a href="global.html#play()">play()</a></li><li><a href="global.html#repeat()">repeat()</a></li><li><a href="global.html#reverse()">reverse()</a></li><li><a href="global.html#set()">set()</a></li><li><a href="global.html#setBackward()">setBackward()</a></li><li><a href="global.html#setBezierPoints()">setBezierPoints()</a></li><li><a href="global.html#setBox">setBox</a></li><li><a href="global.html#setForward()">setForward()</a></li><li><a href="global.html#setHeight">setHeight</a></li><li><a href="global.html#setRadius">setRadius</a></li><li><a href="global.html#setSize">setSize</a></li><li><a href="global.html#setSmooth()">setSmooth()</a></li><li><a href="global.html#setSymReflaction()">setSymReflaction()</a></li><li><a href="global.html#setVertex()">setVertex()</a></li><li><a href="global.html#setWidth">setWidth</a></li><li><a href="global.html#start()">start()</a></li><li><a href="global.html#stop()">stop()</a></li><li><a href="global.html#timeline()">timeline()</a></li><li><a href="global.html#toHEX()">toHEX()</a></li><li><a href="global.html#toHSL()">toHSL()</a></li><li><a href="global.html#toHSLA()">toHSLA()</a></li><li><a href="global.html#toRGB()">toRGB()</a></li><li><a href="global.html#toRGBA()">toRGBA()</a></li><li><a href="global.html#toString()">toString()</a></li><li><a href="global.html#valueOf()">valueOf()</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.10</a> on Fri Jul 01 2022 17:38:03 GMT+0800 (中国标准时间)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

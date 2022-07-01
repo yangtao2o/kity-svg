@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: animate/timeline.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: animate/timeline.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileOverview
+ *
+ * 动画时间线的实现
+ */
+
+define(function(require) {
+
+    var EventHandler = require('../graphic/eventhandler');
+    var utils = require('../core/utils');
+
+    var frame = require('./frame');
+
+    function getPercentValue(b, f, p) {
+        return utils.paralle(b, f, function(b, f) {
+            return b + (f - b) * p;
+        });
+    }
+
+    function getDelta(v1, v2) {
+        return utils.paralle(v1, v2, function(v1, v2) {
+            return v2 - v1;
+        });
+    }
+
+    function TimelineEvent(timeline, type, param) {
+        this.timeline = timeline;
+        this.target = timeline.target;
+        this.type = type;
+        for (var name in param) {
+            if (param.hasOwnProperty(name)) {
+                this[name] = param[name];
+            }
+        }
+    }
+
+    /**
+     * @class kity.Timeline
+     * @catalog animate
+     * @mixins EventHandler
+     * @description 动画时间线
+     */
+    var Timeline = require('../core/class').createClass('Timeline', {
+
+        mixins: [EventHandler],
+
+        /**
+         * @constructor
+         * @for kity.Timeline
+         * @private
+         * @description 时间线应该由动画器进行构造，不应手动创建
+         *
+         */
+        constructor: function(animator, target, duration, easing) {
+            this.callMixin();
+
+            this.target = target;
+
+            this.time = 0;
+            this.duration = duration;
+
+            this.easing = easing;
+            this.animator = animator;
+            this.beginValue = animator.beginValue;
+            this.finishValue = animator.finishValue;
+            this.setter = animator.setter;
+
+            this.status = 'ready';
+        },
+
+        /**
+         * @private
+         *
+         * 让时间线进入下一帧
+         */
+        nextFrame: function(frame) {
+            if (this.status != 'playing') {
+                return;
+            }
+
+            this.time += frame.dur;
+
+            this.setValue(this.getValue());
+
+            if (this.time >= this.duration) {
+                this.timeUp();
+            }
+
+            frame.next();
+        },
+
+        /**
+         * @method getPlayTime()
+         * @for kity.Timeline
+         * @grammar getPlayTime() => {Number}
+         * @description 获得当前播放的时间，取值区间为 [0, duration]
+         */
+        getPlayTime: function() {
+            return this.rollbacking ? this.duration - this.time : this.time;
+        },
+
+        /**
+         * @method getTimeProportion()
+         * @for kity.Timeline
+         * @grammar getTimeProportion() => {Number}
+         * @description 获得当前播放时间的比例，取值区间为 [0, 1]
+         */
+        getTimeProportion: function() {
+            return this.getPlayTime() / this.duration;
+        },
+
+        /**
+         * @method getValueProportion()
+         * @for kity.Timeline
+         * @grammar getValueProportion() => {Number}
+         * @description 获得当前播放时间对应值的比例，取值区间为 [0, 1]；该值实际上是时间比例值经过缓动函数计算之后的值。
+         */
+        getValueProportion: function() {
+            return this.easing(this.getPlayTime(), 0, 1, this.duration);
+        },
+
+        /**
+         * @method getValue()
+         * @for kity.Timeline
+         * @grammar getValue() => {any}
+         * @description 返回当前播放时间对应的值。
+         */
+        getValue: function() {
+            var b = this.beginValue;
+            var f = this.finishValue;
+            var p = this.getValueProportion();
+            return getPercentValue(b, f, p);
+        },
+
+        /**
+         * @private
+         *
+         * 把值通过动画器的 setter 设置到目标上
+         */
+        setValue: function(value) {
+            this.lastValue = this.currentValue;
+            this.currentValue = value;
+            this.setter.call(this.target, this.target, value, this);
+        },
+
+        /**
+         * @method getDelta()
+         * @for kity.Timeline
+         * @grammar getDelta() => {any}
+         * @description 返回当前值和上一帧的值的差值
+         */
+        getDelta: function() {
+            this.lastValue = this.lastValue === undefined ? this.beginValue : this.lastValue;
+            return getDelta(this.lastValue, this.currentValue);
+        },
+
+        /**
+         * @method play()
+         * @for kity.Timeline
+         * @grammar play() => {this}
+         * @description 让时间线播放，如果时间线还没开始，或者已停止、已结束，则重头播放；如果是已暂停，从暂停的位置继续播放
+         */
+        play: function() {
+            var lastStatus = this.status;
+            this.status = 'playing';
+
+            switch (lastStatus) {
+
+                case 'ready':
+                    if (utils.isFunction(this.beginValue)) {
+                        this.beginValue = this.beginValue.call(this.target, this.target);
+                    }
+                    if (utils.isFunction(this.finishValue)) {
+                        this.finishValue = this.finishValue.call(this.target, this.target);
+                    }
+                    this.time = 0;
+                    this.setValue(this.beginValue);
+                    this.frame = frame.requestFrame(this.nextFrame.bind(this));
+                    break;
+
+                case 'finished':
+                case 'stoped':
+                    this.time = 0;
+                    this.frame = frame.requestFrame(this.nextFrame.bind(this));
+                    break;
+
+                case 'paused':
+                    this.frame.next();
+            }
+
+            /**
+             * @event play
+             * @for kity.Timeline
+             * @description 在时间线播放后触发
+             *
+             * @param {String} event.lastStatus
+             *        表示播放前的上一个状态，可能取值为 'ready'、'finished'、'stoped'、'paused'
+             */
+            this.fire('play', new TimelineEvent(this, 'play', {
+                lastStatus: lastStatus
+            }));
+
+            return this;
+        },
+
+        /**
+         * @method pause()
+         * @for kity.Timeline
+         * @description 暂停当前的时间线
+         *
+         * @grammar pause() => {this}
+         */
+        pause: function() {
+            this.status = 'paused';
+
+            /**
+             * @event pause
+             * @for kity.Timeline
+             * @description 暂停事件，在时间线暂停时触发
+             */
+            this.fire('pause', new TimelineEvent(this, 'pause'));
+            frame.releaseFrame(this.frame);
+            return this;
+        },
+
+        /**
+         * @method stop()
+         * @for kity.Timeline
+         * @description 停止当前时间线
+         *
+         * @grammar stop() => {this}
+         */
+        stop: function() {
+            this.status = 'stoped';
+            this.setValue(this.finishValue);
+            this.rollbacking = false;
+
+            /**
+             * @event stop
+             * @for kity.Timeline
+             * @description 停止时间，在时间线停止时触发
+             */
+            this.fire('stop', new TimelineEvent(this, 'stop'));
+            frame.releaseFrame(this.frame);
+            return this;
+        },
+
+        /**
+         * @private
+         *
+         * 播放结束之后的处理
+         */
+        timeUp: function() {
+            if (this.repeatOption) {
+                this.time = 0;
+                if (this.rollback) {
+                    if (this.rollbacking) {
+                        this.decreaseRepeat();
+                        this.rollbacking = false;
+                    } else {
+                        this.rollbacking = true;
+
+                        /**
+                         * @event rollback
+                         * @for kity.Timeline
+                         * @description 回滚事件，在时间线回滚播放开始的时候触发
+                         */
+                        this.fire('rollback', new TimelineEvent(this, 'rollback'));
+                    }
+                } else {
+                    this.decreaseRepeat();
+                }
+                if (!this.repeatOption) {
+                    this.finish();
+                } else {
+                    /**
+                     * @event repeat
+                     * @for kity.Timeline
+                     * @description 循环事件，在时间线循环播放开始的时候触发
+                     */
+                    this.fire('repeat', new TimelineEvent(this, 'repeat'));
+                }
+            } else {
+                this.finish();
+            }
+        },
+        /**
+         * @private
+         *
+         * 决定播放结束的处理
+         */
+        finish: function() {
+            this.setValue(this.finishValue);
+            this.status = 'finished';
+            /**
+             * @event finish
+             * @for kity.Timeline
+             * @description 结束事件，在时间线播放结束后触发（包括重复和回滚都结束）
+             */
+            this.fire('finish', new TimelineEvent(this, 'finish'));
+            frame.releaseFrame(this.frame);
+        },
+        /**
+         * @private
+         *
+         *  循环次数递减
+         */
+        decreaseRepeat: function() {
+            if (this.repeatOption !== true) {
+                this.repeatOption--;
+            }
+        },
+
+        /**
+         * @method repeat()
+         * @for kity.Timeline
+         * @description 设置时间线的重复选项
+         *
+         * @grammar repeat(repeat, rollback) => {this}
+         *
+         * @param  {Number|Boolean} repeat
+         *     是否重复播放，设置为 true 无限循环播放，设置数值则循环指定的次数
+         * @param  {Boolean} rollback
+         *     指示是否要回滚播放。
+         *     如果设置为真，一次事件到 duration 则一个来回算一次循环次数，否则播放完成一次算一次循环次数
+         *
+         */
+        repeat: function(repeat, rollback) {
+            this.repeatOption = repeat;
+            this.rollback = rollback;
+            return this;
+        }
+    });
+    Timeline.requestFrame = frame.requestFrame;
+    Timeline.releaseFrame = frame.releaseFrame;
+    return Timeline;
+});</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="constructor.html">constructor</a></li><li><a href="kity.Animator.html">Animator</a></li><li><a href="kity.Bezier.html">Bezier</a></li><li><a href="kity.BezierPoint.html">BezierPoint</a></li><li><a href="kity.Box.html">Box</a></li><li><a href="kity.Browser.html">Browser</a></li><li><a href="kity.Circle.html">Circle</a></li><li><a href="kity.Class.html">Class</a></li><li><a href="kity.Clip.html">Clip</a></li><li><a href="kity.Color.html">Color</a></li><li><a href="kity.MotionAnimator.html">MotionAnimator</a></li><li><a href="kity.OpacityAnimator.html">OpacityAnimator</a></li><li><a href="kity.PathAnimator.html">PathAnimator</a></li><li><a href="kity.Point.html">Point</a></li><li><a href="kity.Rect.html">Rect</a></li><li><a href="kity.RotateAnimator.html">RotateAnimator</a></li><li><a href="kity.ScaleAnimator.html">ScaleAnimator</a></li><li><a href="kity.Timeline.html">Timeline</a></li><li><a href="kity.TranslateAnimator.html">TranslateAnimator</a></li><li><a href="kity.Utils.html">Utils</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:finish">finish</a></li><li><a href="global.html#event:pause">pause</a></li><li><a href="global.html#event:play">play</a></li><li><a href="global.html#event:repeat">repeat</a></li><li><a href="global.html#event:rollback">rollback</a></li><li><a href="global.html#event:stop">stop</a></li></ul><h3>Global</h3><ul><li><a href="global.html#animate()">animate()</a></li><li><a href="global.html#base()">base()</a></li><li><a href="global.html#callBase()">callBase()</a></li><li><a href="global.html#callMixin()">callMixin()</a></li><li><a href="global.html#clip()">clip()</a></li><li><a href="global.html#clipWidth()">clipWidth()</a></li><li><a href="global.html#clone()">clone()</a></li><li><a href="global.html#copy()">copy()</a></li><li><a href="global.html#create()">create()</a></li><li><a href="global.html">createHSL()</a></li><li><a href="global.html">createHSLA()</a></li><li><a href="global.html">createRGB()</a></li><li><a href="global.html">createRGBA()</a></li><li><a href="global.html#dec()">dec()</a></li><li><a href="global.html#deepExtend()">deepExtend()</a></li><li><a href="global.html#each()">each()</a></li><li><a href="global.html#expand()">expand()</a></li><li><a href="global.html#extend()">extend()</a></li><li><a href="global.html#fadeIn()">fadeIn()</a></li><li><a href="global.html#fadeOut()">fadeOut()</a></li><li><a href="global.html#fadeTo()">fadeTo()</a></li><li><a href="global.html#flatten()">flatten()</a></li><li><a href="global.html">fromPolar()</a></li><li><a href="global.html#fxOpacity()">fxOpacity()</a></li><li><a href="global.html#fxPath()">fxPath()</a></li><li><a href="global.html#fxRotate()">fxRotate()</a></li><li><a href="global.html#fxScale">fxScale</a></li><li><a href="global.html#fxTranslate()">fxTranslate()</a></li><li><a href="global.html#get()">get()</a></li><li><a href="global.html#getBackward()">getBackward()</a></li><li><a href="global.html#getBezierPoints()">getBezierPoints()</a></li><li><a href="global.html#getClass()">getClass()</a></li><li><a href="global.html#getDelta()">getDelta()</a></li><li><a href="global.html#getForward()">getForward()</a></li><li><a href="global.html#getPlayTime()">getPlayTime()</a></li><li><a href="global.html#getRadius">getRadius</a></li><li><a href="global.html#getRangeX()">getRangeX()</a></li><li><a href="global.html#getRangeY()">getRangeY()</a></li><li><a href="global.html#getTimeProportion()">getTimeProportion()</a></li><li><a href="global.html#getType()">getType()</a></li><li><a href="global.html#getValue()">getValue()</a></li><li><a href="global.html#getValueProportion()">getValueProportion()</a></li><li><a href="global.html#getVertex()">getVertex()</a></li><li><a href="global.html#inc()">inc()</a></li><li><a href="global.html#intersect()">intersect()</a></li><li><a href="global.html#inverse">inverse</a></li><li><a href="global.html#isArray()">isArray()</a></li><li><a href="global.html#isBoolean()">isBoolean()</a></li><li><a href="global.html#isEmpty()">isEmpty()</a></li><li><a href="global.html#isFunction()">isFunction()</a></li><li><a href="global.html#isNumber()">isNumber()</a></li><li><a href="global.html#isObject()">isObject()</a></li><li><a href="global.html#isRegExp()">isRegExp()</a></li><li><a href="global.html#isSmooth()">isSmooth()</a></li><li><a href="global.html#isString()">isString()</a></li><li><a href="global.html#isSymReflaction()">isSymReflaction()</a></li><li><a href="global.html#merge()">merge()</a></li><li><a href="global.html#mixin()">mixin()</a></li><li><a href="global.html#motion()">motion()</a></li><li><a href="global.html#moveTo()">moveTo()</a></li><li><a href="global.html#paralle()">paralle()</a></li><li><a href="global.html">parse()</a></li><li><a href="global.html#pause()">pause()</a></li><li><a href="global.html#pipe()">pipe()</a></li><li><a href="global.html#play()">play()</a></li><li><a href="global.html#repeat()">repeat()</a></li><li><a href="global.html#reverse()">reverse()</a></li><li><a href="global.html#set()">set()</a></li><li><a href="global.html#setBackward()">setBackward()</a></li><li><a href="global.html#setBezierPoints()">setBezierPoints()</a></li><li><a href="global.html#setBox">setBox</a></li><li><a href="global.html#setForward()">setForward()</a></li><li><a href="global.html#setHeight">setHeight</a></li><li><a href="global.html#setRadius">setRadius</a></li><li><a href="global.html#setSize">setSize</a></li><li><a href="global.html#setSmooth()">setSmooth()</a></li><li><a href="global.html#setSymReflaction()">setSymReflaction()</a></li><li><a href="global.html#setVertex()">setVertex()</a></li><li><a href="global.html#setWidth">setWidth</a></li><li><a href="global.html#start()">start()</a></li><li><a href="global.html#stop()">stop()</a></li><li><a href="global.html#timeline()">timeline()</a></li><li><a href="global.html#toHEX()">toHEX()</a></li><li><a href="global.html#toHSL()">toHSL()</a></li><li><a href="global.html#toHSLA()">toHSLA()</a></li><li><a href="global.html#toRGB()">toRGB()</a></li><li><a href="global.html#toRGBA()">toRGBA()</a></li><li><a href="global.html#toString()">toString()</a></li><li><a href="global.html#valueOf()">valueOf()</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.10</a> on Fri Jul 01 2022 17:38:03 GMT+0800 (中国标准时间)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

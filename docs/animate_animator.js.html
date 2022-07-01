@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: animate/animator.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: animate/animator.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @fileOverview
+ *
+ * 提供基本的动画支持
+ */
+
+define(function(require) {
+
+    function parseTime(str) {
+        var value = parseFloat(str, 10);
+        if (/ms/.test(str)) {
+            return value;
+        }
+        if (/s/.test(str)) {
+            return value * 1000;
+        }
+        if (/min/.test(str)) {
+            return value * 60 * 1000;
+        }
+        return value;
+    }
+
+    var Timeline = require('./timeline');
+    var easingTable = require('./easing');
+
+
+    /**
+     * @class kity.Animator
+     * @catalog animate
+     * @description 表示一个动画启动器，可以作用于不同的对象进行动画
+     */
+    var Animator = require('../core/class').createClass('Animator', {
+
+        /**
+         * @constructor
+         * @for kity.Animator
+         * @catalog animate
+         *
+         * @grammar new kity.Animator(beginValue, finishValue, setter)
+         * @grammar new kity.Animator(option)
+         *
+         * @param  {any}      beginValue|opt.beginValue
+         *     动画的起始值，允许的类型有数字、数组、字面量、kity.Point、kity.Vector、kity.Box、kity.Matrix
+         *
+         * @param  {any}      finishValue|opt.beginValue
+         *     动画的结束值，类型应于起始值相同
+         *
+         * @param  {Function} setter|opt.setter
+         *     值的使用函数，接受三个参数: function(target, value, timeline)
+         *         target   {object}        动画的目标
+         *         value    {any}           动画的当前值
+         *         timeline {kity.Timeline} 动画当前的时间线对象
+         */
+        constructor: function(beginValue, finishValue, setter) {
+            if (arguments.length == 1) {
+                var opt = arguments[0];
+                this.beginValue = opt.beginValue;
+                this.finishValue = opt.finishValue;
+                this.setter = opt.setter;
+            } else {
+                this.beginValue = beginValue;
+                this.finishValue = finishValue;
+                this.setter = setter;
+            }
+        },
+
+        /**
+         * @method start()
+         * @for kity.Animator
+         * @description 使用当前的动画器启动在指定目标上启动动画
+         *
+         * @grammar start(target, duration, easing, delay, callback) => {kity.Timeline}
+         * @grammar start(target, option) => {kity.Timeline}
+         *
+         * @param  {object} target
+         *     启动动画的目标
+         *
+         * @param  {Number|String} duration|option.duration
+         *     [Optional] 动画的持续时间，如 300、"300ms"、"1.5min"
+         *
+         * @param  {String|Function} easing|option.easing
+         *     [Optional] 动画使用的缓动函数，如 "ease"、"linear"、"swing"
+         *
+         * @param  {Number|String} delay|option.delay
+         *     [Optional] 动画的播放延迟时间
+         *
+         * @param  {Function} callback|option.callback
+         *     [Optional] 动画结束后的回调函数
+         *
+         * @example
+         *
+         * ```js
+         * var turnRed = new kity.Animator(
+         *     new kity.Color('yellow'),
+         *     new kity.Color('red'),
+         *     function(target, value) {
+         *         target.fill(value);
+         *     });
+         *
+         * turnRed.start(rect, 300, 'ease', function() {
+         *     console.log('I am red!');
+         * });
+         * ```
+         */
+        start: function(target, duration, easing, delay, callback) {
+            if (arguments.length === 2 &amp;&amp; typeof(duration) == 'object') {
+                easing = duration.easing;
+                delay = duration.delay;
+                callback = duration.callback;
+                duration = duration.duration;
+            }
+            if (arguments.length === 4 &amp;&amp; typeof(delay) == 'function') {
+                callback = delay;
+                delay = 0;
+            }
+            var timeline = this.create(target, duration, easing, callback);
+            delay = parseTime(delay);
+            if (delay > 0) {
+                setTimeout(function() {
+                    timeline.play();
+                }, delay);
+            } else {
+                timeline.play();
+            }
+            return timeline;
+        },
+
+
+        /**
+         * @method create()
+         * @for kity.Animator
+         * @description 使用当前的动画器为指定目标创建时间线
+         *
+         * @grammar create(target, duration, easing, callback) => {kity.Timeline}
+         *
+         * @param  {object}            target   要创建的时间线的目标
+         * @param  {Number|String}     duration 要创建的时间线的长度，如 300、"5s"、"0.5min"
+         * @param  {String|Function}   easing   要创建的时间线的缓动函数，如 'ease'、'linear'、'swing'
+         * @param  {Function}          callback 时间线播放结束之后的回调函数
+         *
+         * @example
+         *
+         * ```js
+         * var expand = new kity.Animator({
+         *     beginValue: function(target) {
+         *         return target.getBox();
+         *     },
+         *     finishValue: function(target) {
+         *         return target.getBox().expand(100, 100, 100, 100);
+         *     },
+         *     setter: function(target, value) {
+         *         target.setBox(value)
+         *     }
+         * });
+         *
+         * var timeline = expand.create(rect, 300);
+         * timeline.repeat(3).play();
+         * ```
+         */
+        create: function(target, duration, easing, callback) {
+            var timeline;
+
+            duration = duration &amp;&amp; parseTime(duration) || Animator.DEFAULT_DURATION;
+            easing = easing || Animator.DEFAULT_EASING;
+
+            if (typeof(easing) == 'string') {
+                easing = easingTable[easing];
+            }
+
+            timeline = new Timeline(this, target, duration, easing);
+
+            if (typeof(callback) == 'function') {
+                timeline.on('finish', callback);
+            }
+            return timeline;
+        },
+
+        /**
+         * @method reverse()
+         * @for kity.Animator
+         * @grammar reverse() => {kity.Animator}
+         * @description 创建一个与当前动画器相反的动画器
+         *
+         * @example
+         *
+         * ```js
+         * var turnYellow = turnRed.reverse();
+         * ```
+         */
+        reverse: function() {
+            return new Animator(this.finishValue, this.beginValue, this.setter);
+        }
+
+    });
+
+    Animator.DEFAULT_DURATION = 300;
+    Animator.DEFAULT_EASING = 'linear';
+
+    var Shape = require('../graphic/shape');
+    require('../core/class').extendClass(Shape, {
+        /**
+         * @method animate()
+         * @for kity.Shape
+         * @description 在图形上播放使用指定的动画器播放动画，如果图形当前有动画正在播放，则会加入播放队列
+         *
+         * @grammar animate(animator, duration, easing, delay, callback)
+         *
+         * @param  {object}            animator 播放动画使用的动画器
+         * @param  {Number|String}     duration 动画的播放长度，如 300、"5s"、"0.5min"
+         * @param  {Number|String}     delay    动画播放前的延时
+         * @param  {String|Function}   easing   动画播放使用的缓动函数，如 'ease'、'linear'、'swing'
+         * @param  {Function}          callback 播放结束之后的回调函数
+         *
+         * @example
+         *
+         * ```js
+         * rect.animate(turnRed, 300); // turnRect 是一个动画器
+         * rect.animate(expand, 500);  // turnRect 播放结束后播放 expand
+         * ```
+         */
+        animate: function(animator, duration, easing, delay, callback) {
+            var queue = this._KityAnimateQueue = this._KityAnimateQueue || [];
+            var timeline = animator.create(this, duration, easing, callback);
+
+            function dequeue() {
+                queue.shift();
+                if (queue.length) {
+                    setTimeout(queue[0].t.play.bind(queue[0].t), queue[0].d);
+                }
+            }
+            timeline.on('finish', dequeue);
+            queue.push({
+                t: timeline,
+                d: delay
+            });
+            if (queue.length == 1) {
+                setTimeout(timeline.play.bind(timeline), delay);
+            }
+            return this;
+        },
+
+        /**
+         * @method timeline()
+         * @for kity.Shape
+         * @description 获得当前正在播放的动画的时间线
+         *
+         * @grammar timeline() => {kity.Timeline}
+         *
+         * @example
+         *
+         * ```js
+         * rect.timeline().repeat(2);
+         * ```
+         */
+        timeline: function() {
+            return this._KityAnimateQueue[0].t;
+        },
+
+        /**
+         * @method stop()
+         * @for kity.Shape
+         * @description 停止当前正在播放的动画
+         *
+         * @grammar stop() => {this}
+         *
+         * @example
+         *
+         * ```js
+         * rect.stop(); // 停止 rect 上的动画
+         * ```
+         */
+        stop: function() {
+            var queue = this._KityAnimateQueue;
+            if (queue) {
+                while (queue.length) {
+                    queue.shift().t.stop();
+                }
+            }
+            return this;
+        }
+    });
+
+    return Animator;
+});</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="constructor.html">constructor</a></li><li><a href="kity.Animator.html">Animator</a></li><li><a href="kity.Bezier.html">Bezier</a></li><li><a href="kity.BezierPoint.html">BezierPoint</a></li><li><a href="kity.Box.html">Box</a></li><li><a href="kity.Browser.html">Browser</a></li><li><a href="kity.Circle.html">Circle</a></li><li><a href="kity.Class.html">Class</a></li><li><a href="kity.Clip.html">Clip</a></li><li><a href="kity.Color.html">Color</a></li><li><a href="kity.MotionAnimator.html">MotionAnimator</a></li><li><a href="kity.OpacityAnimator.html">OpacityAnimator</a></li><li><a href="kity.PathAnimator.html">PathAnimator</a></li><li><a href="kity.Point.html">Point</a></li><li><a href="kity.Rect.html">Rect</a></li><li><a href="kity.RotateAnimator.html">RotateAnimator</a></li><li><a href="kity.ScaleAnimator.html">ScaleAnimator</a></li><li><a href="kity.Timeline.html">Timeline</a></li><li><a href="kity.TranslateAnimator.html">TranslateAnimator</a></li><li><a href="kity.Utils.html">Utils</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:finish">finish</a></li><li><a href="global.html#event:pause">pause</a></li><li><a href="global.html#event:play">play</a></li><li><a href="global.html#event:repeat">repeat</a></li><li><a href="global.html#event:rollback">rollback</a></li><li><a href="global.html#event:stop">stop</a></li></ul><h3>Global</h3><ul><li><a href="global.html#animate()">animate()</a></li><li><a href="global.html#base()">base()</a></li><li><a href="global.html#callBase()">callBase()</a></li><li><a href="global.html#callMixin()">callMixin()</a></li><li><a href="global.html#clip()">clip()</a></li><li><a href="global.html#clipWidth()">clipWidth()</a></li><li><a href="global.html#clone()">clone()</a></li><li><a href="global.html#copy()">copy()</a></li><li><a href="global.html#create()">create()</a></li><li><a href="global.html">createHSL()</a></li><li><a href="global.html">createHSLA()</a></li><li><a href="global.html">createRGB()</a></li><li><a href="global.html">createRGBA()</a></li><li><a href="global.html#dec()">dec()</a></li><li><a href="global.html#deepExtend()">deepExtend()</a></li><li><a href="global.html#each()">each()</a></li><li><a href="global.html#expand()">expand()</a></li><li><a href="global.html#extend()">extend()</a></li><li><a href="global.html#fadeIn()">fadeIn()</a></li><li><a href="global.html#fadeOut()">fadeOut()</a></li><li><a href="global.html#fadeTo()">fadeTo()</a></li><li><a href="global.html#flatten()">flatten()</a></li><li><a href="global.html">fromPolar()</a></li><li><a href="global.html#fxOpacity()">fxOpacity()</a></li><li><a href="global.html#fxPath()">fxPath()</a></li><li><a href="global.html#fxRotate()">fxRotate()</a></li><li><a href="global.html#fxScale">fxScale</a></li><li><a href="global.html#fxTranslate()">fxTranslate()</a></li><li><a href="global.html#get()">get()</a></li><li><a href="global.html#getBackward()">getBackward()</a></li><li><a href="global.html#getBezierPoints()">getBezierPoints()</a></li><li><a href="global.html#getClass()">getClass()</a></li><li><a href="global.html#getDelta()">getDelta()</a></li><li><a href="global.html#getForward()">getForward()</a></li><li><a href="global.html#getPlayTime()">getPlayTime()</a></li><li><a href="global.html#getRadius">getRadius</a></li><li><a href="global.html#getRangeX()">getRangeX()</a></li><li><a href="global.html#getRangeY()">getRangeY()</a></li><li><a href="global.html#getTimeProportion()">getTimeProportion()</a></li><li><a href="global.html#getType()">getType()</a></li><li><a href="global.html#getValue()">getValue()</a></li><li><a href="global.html#getValueProportion()">getValueProportion()</a></li><li><a href="global.html#getVertex()">getVertex()</a></li><li><a href="global.html#inc()">inc()</a></li><li><a href="global.html#intersect()">intersect()</a></li><li><a href="global.html#inverse">inverse</a></li><li><a href="global.html#isArray()">isArray()</a></li><li><a href="global.html#isBoolean()">isBoolean()</a></li><li><a href="global.html#isEmpty()">isEmpty()</a></li><li><a href="global.html#isFunction()">isFunction()</a></li><li><a href="global.html#isNumber()">isNumber()</a></li><li><a href="global.html#isObject()">isObject()</a></li><li><a href="global.html#isRegExp()">isRegExp()</a></li><li><a href="global.html#isSmooth()">isSmooth()</a></li><li><a href="global.html#isString()">isString()</a></li><li><a href="global.html#isSymReflaction()">isSymReflaction()</a></li><li><a href="global.html#merge()">merge()</a></li><li><a href="global.html#mixin()">mixin()</a></li><li><a href="global.html#motion()">motion()</a></li><li><a href="global.html#moveTo()">moveTo()</a></li><li><a href="global.html#paralle()">paralle()</a></li><li><a href="global.html">parse()</a></li><li><a href="global.html#pause()">pause()</a></li><li><a href="global.html#pipe()">pipe()</a></li><li><a href="global.html#play()">play()</a></li><li><a href="global.html#repeat()">repeat()</a></li><li><a href="global.html#reverse()">reverse()</a></li><li><a href="global.html#set()">set()</a></li><li><a href="global.html#setBackward()">setBackward()</a></li><li><a href="global.html#setBezierPoints()">setBezierPoints()</a></li><li><a href="global.html#setBox">setBox</a></li><li><a href="global.html#setForward()">setForward()</a></li><li><a href="global.html#setHeight">setHeight</a></li><li><a href="global.html#setRadius">setRadius</a></li><li><a href="global.html#setSize">setSize</a></li><li><a href="global.html#setSmooth()">setSmooth()</a></li><li><a href="global.html#setSymReflaction()">setSymReflaction()</a></li><li><a href="global.html#setVertex()">setVertex()</a></li><li><a href="global.html#setWidth">setWidth</a></li><li><a href="global.html#start()">start()</a></li><li><a href="global.html#stop()">stop()</a></li><li><a href="global.html#timeline()">timeline()</a></li><li><a href="global.html#toHEX()">toHEX()</a></li><li><a href="global.html#toHSL()">toHSL()</a></li><li><a href="global.html#toHSLA()">toHSLA()</a></li><li><a href="global.html#toRGB()">toRGB()</a></li><li><a href="global.html#toRGBA()">toRGBA()</a></li><li><a href="global.html#toString()">toString()</a></li><li><a href="global.html#valueOf()">valueOf()</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 3.6.10</a> on Fri Jul 01 2022 17:38:03 GMT+0800 (中国标准时间)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
